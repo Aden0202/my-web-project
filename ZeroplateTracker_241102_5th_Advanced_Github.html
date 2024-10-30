@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Zero Plate Tracker</title>
+    <style>
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #8BC6EC 0%, #9599E2 100%);
+            font-family: Arial, sans-serif;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .hidden { 
+            display: none; 
+        }
+
+        .input-group {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin: 15px 0;
+            text-align: center;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        select {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        .carbon-footprint, 
+        .points-display {
+            background: white;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .carbon-value {
+            color: #FF0000;
+            font-weight: bold;
+        }
+
+        .stats-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .menu-item {
+            background: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        h2, h3 {
+            color: #333;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        #dayHeader {
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+            font-size: 24px;
+            text-align: center;
+        }
+
+        .next-screen {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        #currentMenu {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        #favoriteMenusList div,
+        #dailyStats div {
+            padding: 8px;
+            margin: 5px 0;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+
+        #carbonStats {
+            font-size: 18px;
+            color: #FF0000;
+            font-weight: bold;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+	<h1 style="text-align: center;">Zero Plate Tracker</h1>
+    <div class="container">
+        <div id="initialScreen">
+            <div class="input-group">
+                <label for="userName">사용자 이름:</label>
+                <input type="text" id="userName" required>
+                <button onclick="startTracking()">시작하기</button>
+            </div>
+        </div>
+
+        <div id="trackingScreen" class="hidden">
+            <h2 id="dayHeader"></h2>
+            <div id="foodInputs">
+                <div class="menu-item">
+                    <p id="currentMenu"></p>
+                    <div>
+                        <label for="totalWeight">총 무게(g):</label>
+                        <input type="number" id="totalWeight" min="0" required>
+                    </div>
+                    <div>
+                        <label for="leftoverLevel">남은 음식량:</label>
+                        <select id="leftoverLevel">
+                            <option value="0">0%, 없음</option>
+                            <option value="1">25%, 조금</option>
+                            <option value="2">50%, 보통</option>
+                            <option value="3">75%, 많음</option>
+                        </select>
+                    </div>
+                    <button onclick="recordFood()">기록하기</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="dailyResultScreen" class="hidden">
+            <h3>오늘의 결과</h3>
+            <div id="dailyCarbon" class="carbon-footprint"></div>
+            <div id="dailyPoints" class="points-display"></div>
+            <div id="pointsMessage" class="points-display"></div>
+            <div class="input-group">
+                <label for="addToFavorites">즐겨찾기에 추가:</label>
+                <input type="checkbox" id="addToFavorites">
+            </div>
+            <div class="next-screen">
+                <button onclick="nextDay()">다음 날 기록하기</button>
+            </div>
+        </div>
+
+        <div id="weeklyStats" class="hidden">
+            <h2>주간 통계</h2>
+            
+            <div class="stats-section">
+                <h3>즐겨찾기 메뉴</h3>
+                <div id="favoriteMenusList"></div>
+            </div>
+
+            <div class="stats-section">
+                <h3>배출 탄소량</h3>
+                <div id="carbonStats"></div>
+            </div>
+
+            <div class="stats-section">
+                <h3>일별 기록</h3>
+                <div id="dailyStats"></div>
+            </div>
+
+            <div class="input-group">
+                <button onclick="startNewWeek()">새로운 일주일 시작하기</button>
+                <button onclick="endSession()">종료하기</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentDay = 0;
+        let userPoints = 100;
+        let favoriteMenus = new Set();
+        let dailyRecords = [];
+        let currentMenu = '';
+
+        const menus = [
+            "귀리밥 수제비국", "주꾸미 제육 볶음", "육개장", "순살 방어 구이", "볼로네제 하트 피자",
+            "오리 불고기", "맛살 냉채", "포크 커틀릿과 소스", "조랭이 떡국", "오징어 김치전",
+            "팽이버섯국", "돈수육", "로제 퐁듀 스테이크볼", "쇠고기 메추리알 장조림", "마파두부",
+            "한방 닭곰탕", "계란볶음밥과 자장소스", "돈육 김치찌개", "스윗치즈 코다리살 튀김",
+            "발아현미밥 들깨 무채국", "닭살야채볶음", "소시지브로콜리볶음", "기장밥 해물 순두부 찌개",
+            "한우 수제 산적", "참치 마요 주먹밥", "가쓰오 우동", "오징어 튀김", "카프레제 샐러드",
+            "훈제 오리 채소 무침 두부 조림"
+        ];
+
+        function startTracking() {
+            const userName = document.getElementById('userName').value;
+            if (!userName) {
+                alert('사용자 이름을 입력해주세요.');
+                return;
+            }
+            document.getElementById('initialScreen').classList.add('hidden');
+            document.getElementById('trackingScreen').classList.remove('hidden');
+            startNewDay();
+        }
+
+        function startNewDay() {
+            currentDay++;
+            document.getElementById('dayHeader').textContent = `${currentDay}일차 급식`;
+            currentMenu = menus[Math.floor(Math.random() * menus.length)];
+            document.getElementById('currentMenu').textContent = currentMenu;
+        }
+
+        function recordFood() {
+            const totalWeight = parseFloat(document.getElementById('totalWeight').value);
+            const leftoverLevel = parseInt(document.getElementById('leftoverLevel').value);
+
+            if (isNaN(totalWeight) || totalWeight < 0) {
+                alert('올바른 무게를 입력해주세요.');
+                return;
+            }
+    
+            let leftoverFood = 0;
+            switch(leftoverLevel) {
+                case 0: leftoverFood = 0; break;
+                case 1: leftoverFood = totalWeight * 0.25; break;
+                case 2: leftoverFood = totalWeight * 0.5; break;
+                case 3: leftoverFood = totalWeight * 0.75; break;
+                default: leftoverFood = 0; break; 
+            }
+
+            const carbonFootprint = leftoverFood * 0.0025;
+            const message = updatePoints(leftoverFood, totalWeight, carbonFootprint);
+    
+            dailyRecords.push({
+                day: currentDay,
+                menu: currentMenu,
+                carbonFootprint: carbonFootprint,
+                points: userPoints
+            });
+
+            showDailyResult(carbonFootprint, message);
+        }
+
+        function updatePoints(leftoverFood, totalWeight, carbonFootprint) {
+            if (totalWeight > 0) {
+                const leftoverPercentage = (leftoverFood / totalWeight) * 100;
+        
+                if (leftoverFood === 0) {
+                    return addPoints(15, "음식을 남기지 않았습니다! 보상 포인트 15점 추가.");
+                } else if (leftoverPercentage <= 25) {
+                    return addPoints(10, "남은 음식물 양이 25% 이하입니다. 보상 포인트 10점 추가.");
+                } else if (leftoverPercentage <= 50) {
+                    return addPoints(5, "남은 음식물 양이 50% 이하입니다. 보상 포인트 5점 추가.");
+                } else {
+                    const deduction = Math.max(2, Math.round(carbonFootprint * 10));
+                    userPoints = Math.max(userPoints - deduction, 0);
+                    return `남은 음식물 양이 75% 이상입니다. ${deduction} 포인트 차감.`;
+                }
+            }
+            return null;
+        }
+
+        function addPoints(points, message) {
+            const previousPoints = userPoints;
+    
+            if (userPoints < 150) {
+                userPoints = Math.min(userPoints + points, 150);
+        
+                if (userPoints === 150 && previousPoints < 150) {
+                    return `${message}\n포인트를 더이상 획득할 수 없지만 환경을 생각하는 당신을 칭찬합니다.`;
+                } else if (userPoints < 150) {
+                    return message;
+                }
+            }
+    
+            if (userPoints === 150) {
+                return "포인트를 더이상 획득할 수 없지만 환경을 생각하는 당신을 칭찬합니다.";
+            }
+            return null;
+        }
+
+        function showDailyResult(carbonFootprint, message) {
+            document.getElementById('trackingScreen').classList.add('hidden');
+            document.getElementById('dailyResultScreen').classList.remove('hidden');
+            document.getElementById('dailyCarbon').innerHTML = 
+                `배출 탄소량: <span class="carbon-value">${carbonFootprint.toFixed(2)} gCO2eq</span>`;
+            document.getElementById('dailyPoints').textContent = `현재 포인트: ${userPoints}`;
+            if (message) {
+                document.getElementById('pointsMessage').textContent = message;
+            }
+        }
+
+        function nextDay() {
+            if (document.getElementById('addToFavorites').checked) {
+                favoriteMenus.add(currentMenu);
+            }
+
+            document.getElementById('dailyResultScreen').classList.add('hidden');
+
+            if (currentDay < 7) {
+                document.getElementById('trackingScreen').classList.remove('hidden');
+                startNewDay();
+            } else {
+                showWeeklyStats();
+            }
+        }
+
+        function showWeeklyStats() {
+            document.getElementById('weeklyStats').classList.remove('hidden');
+            
+            const favoritesList = document.getElementById('favoriteMenusList');
+            favoritesList.innerHTML = Array.from(favoriteMenus).map(menu => `<div>${menu}</div>`).join('') || '즐겨찾기 메뉴가 없습니다.';
+
+            const totalCarbon = dailyRecords.reduce((sum, record) => sum + record.carbonFootprint, 0);
+            document.getElementById('carbonStats').innerHTML = `총 발생 탄소량: ${totalCarbon.toFixed(2)} gCO2eq`;
+
+            const dailyStatsList = document.getElementById('dailyStats');
+            dailyStatsList.innerHTML = dailyRecords.map(record => 
+                `<div>
+                    ${record.day}일차 - ${record.menu}
+                    (배출 탄소량: <span class="carbon-value">${record.carbonFootprint.toFixed(2)} gCO2eq</span>, 
+                    포인트: ${record.points})
+                </div>`
+            ).join('');
+        }
+
+        function startNewWeek() {
+            currentDay = 0;
+            userPoints = 100;
+            favoriteMenus.clear();
+            dailyRecords = [];
+            
+            document.getElementById('weeklyStats').classList.add('hidden');
+            document.getElementById('trackingScreen').classList.remove('hidden');
+            startNewDay();
+        }
+
+        function endSession() {
+            location.reload();
+        }
+    </script>
+</body>
+</html>
